@@ -83,10 +83,7 @@ func (h *Handler) Verify(c echo.Context) error {
 	}
 
 	if !result.Valid && len(result.Errors) > 0 {
-		errorMsg := result.ErrorCode
-		if len(result.Errors) > 0 {
-			errorMsg = result.Errors[0]
-		}
+		errorMsg := result.Errors[0]
 		response.InvalidReason = &errorMsg
 	}
 
@@ -128,20 +125,13 @@ func (h *Handler) Settle(c echo.Context) error {
 		})
 	}
 
-	// Extract sender from authorization if present
-	var expectedSender *string
-	if req.PaymentPayload.Payload.Authorization.From != "" {
-		sender := req.PaymentPayload.Payload.Authorization.From
-		expectedSender = &sender
-	}
-
 	// Build settle command for existing handler
 	cmd := command.SettlePaymentCommand{
 		SignedTransaction: req.PaymentPayload.Payload.SignedTransaction,
 		TokenType:         tokenType.String(),
 		ExpectedRecipient: req.PaymentRequirements.PayTo,
 		MinAmount:         minAmount,
-		ExpectedSender:    expectedSender,
+		ExpectedSender:    stringPtrOrNil(req.PaymentPayload.Payload.Authorization.From),
 		Network:           network.String(),
 	}
 
@@ -246,4 +236,12 @@ func parseAsset(asset string, network valueobject.Network) (valueobject.TokenTyp
 	// Unknown asset - treat as SIP-010 token, default to STX behavior
 	// The contract ID will be used for balance checks
 	return valueobject.TokenSTX, asset
+}
+
+// stringPtrOrNil returns a pointer to s if non-empty, otherwise nil
+func stringPtrOrNil(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

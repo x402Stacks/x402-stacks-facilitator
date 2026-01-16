@@ -9,28 +9,8 @@ import (
 	"github.com/x402stacks/stacks-facilitator/internal/payment/domain/valueobject"
 )
 
-type mockBalanceChecker struct {
-	stxBalance   uint64
-	tokenBalance uint64
-	err          error
-}
-
-func (m *mockBalanceChecker) GetSTXBalance(ctx context.Context, address string, network valueobject.Network) (uint64, error) {
-	if m.err != nil {
-		return 0, m.err
-	}
-	return m.stxBalance, nil
-}
-
-func (m *mockBalanceChecker) GetTokenBalance(ctx context.Context, address string, contractID string, network valueobject.Network) (uint64, error) {
-	if m.err != nil {
-		return 0, m.err
-	}
-	return m.tokenBalance, nil
-}
-
 func TestPreSubmitVerifier_Verify_Success(t *testing.T) {
-	checker := &mockBalanceChecker{stxBalance: 2000000}
+	checker := &MockBalanceChecker{STXBalance: 2000000}
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
@@ -57,7 +37,7 @@ func TestPreSubmitVerifier_Verify_Success(t *testing.T) {
 }
 
 func TestPreSubmitVerifier_Verify_MissingSender(t *testing.T) {
-	checker := &mockBalanceChecker{stxBalance: 2000000}
+	checker := &MockBalanceChecker{STXBalance: 2000000}
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
@@ -84,7 +64,7 @@ func TestPreSubmitVerifier_Verify_MissingSender(t *testing.T) {
 }
 
 func TestPreSubmitVerifier_Verify_MissingRecipient(t *testing.T) {
-	checker := &mockBalanceChecker{stxBalance: 2000000}
+	checker := &MockBalanceChecker{STXBalance: 2000000}
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
@@ -111,7 +91,7 @@ func TestPreSubmitVerifier_Verify_MissingRecipient(t *testing.T) {
 }
 
 func TestPreSubmitVerifier_Verify_MissingValue(t *testing.T) {
-	checker := &mockBalanceChecker{stxBalance: 2000000}
+	checker := &MockBalanceChecker{STXBalance: 2000000}
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
@@ -138,7 +118,7 @@ func TestPreSubmitVerifier_Verify_MissingValue(t *testing.T) {
 }
 
 func TestPreSubmitVerifier_Verify_InvalidSenderAddress(t *testing.T) {
-	checker := &mockBalanceChecker{stxBalance: 2000000}
+	checker := &MockBalanceChecker{STXBalance: 2000000}
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
@@ -165,7 +145,7 @@ func TestPreSubmitVerifier_Verify_InvalidSenderAddress(t *testing.T) {
 }
 
 func TestPreSubmitVerifier_Verify_RecipientMismatch(t *testing.T) {
-	checker := &mockBalanceChecker{stxBalance: 2000000}
+	checker := &MockBalanceChecker{STXBalance: 2000000}
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
@@ -192,7 +172,7 @@ func TestPreSubmitVerifier_Verify_RecipientMismatch(t *testing.T) {
 }
 
 func TestPreSubmitVerifier_Verify_AmountTooLow(t *testing.T) {
-	checker := &mockBalanceChecker{stxBalance: 2000000}
+	checker := &MockBalanceChecker{STXBalance: 2000000}
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
@@ -219,7 +199,7 @@ func TestPreSubmitVerifier_Verify_AmountTooLow(t *testing.T) {
 }
 
 func TestPreSubmitVerifier_Verify_MissingSignedTransaction(t *testing.T) {
-	checker := &mockBalanceChecker{stxBalance: 2000000}
+	checker := &MockBalanceChecker{STXBalance: 2000000}
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
@@ -246,7 +226,7 @@ func TestPreSubmitVerifier_Verify_MissingSignedTransaction(t *testing.T) {
 }
 
 func TestPreSubmitVerifier_Verify_InsufficientBalance(t *testing.T) {
-	checker := &mockBalanceChecker{stxBalance: 500000} // Less than required
+	checker := &MockBalanceChecker{STXBalance: 500000} // Less than required
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
@@ -273,7 +253,7 @@ func TestPreSubmitVerifier_Verify_InsufficientBalance(t *testing.T) {
 }
 
 func TestPreSubmitVerifier_Verify_BalanceCheckError(t *testing.T) {
-	checker := &mockBalanceChecker{err: errors.New("network error")}
+	checker := &MockBalanceChecker{Error: errors.New("network error")}
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
@@ -302,7 +282,7 @@ func TestPreSubmitVerifier_Verify_BalanceCheckError(t *testing.T) {
 }
 
 func TestPreSubmitVerifier_Verify_TokenBalance(t *testing.T) {
-	checker := &mockBalanceChecker{tokenBalance: 2000000}
+	checker := &MockBalanceChecker{TokenBalance: 2000000}
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
@@ -329,7 +309,7 @@ func TestPreSubmitVerifier_Verify_TokenBalance(t *testing.T) {
 }
 
 func TestPreSubmitVerifier_Verify_RecipientCaseInsensitive(t *testing.T) {
-	checker := &mockBalanceChecker{stxBalance: 2000000}
+	checker := &MockBalanceChecker{STXBalance: 2000000}
 	verifier := NewPreSubmitVerifier(checker)
 
 	payload := StacksPayload{
