@@ -296,3 +296,91 @@ func IsTransactionFailed(status string) bool {
 	}
 	return false
 }
+
+// AccountBalanceResponse represents the account balance API response
+type AccountBalanceResponse struct {
+	STX            STXBalance            `json:"stx"`
+	FungibleTokens map[string]TokenBalance `json:"fungible_tokens"`
+}
+
+// STXBalance represents STX balance info
+type STXBalance struct {
+	Balance       string `json:"balance"`
+	LockedBalance string `json:"locked"`
+}
+
+// TokenBalance represents a fungible token balance
+type TokenBalance struct {
+	Balance string `json:"balance"`
+}
+
+// GetSTXBalance returns the STX balance for an address
+func (c *Client) GetSTXBalance(ctx context.Context, address string) (uint64, error) {
+	url := fmt.Sprintf("%s/extended/v1/address/%s/stx", c.baseURL, address)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch balance: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("API error: %s", string(body))
+	}
+
+	var balanceResp STXBalance
+	if err := json.NewDecoder(resp.Body).Decode(&balanceResp); err != nil {
+		return 0, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	balance, err := strconv.ParseUint(balanceResp.Balance, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid balance: %w", err)
+	}
+
+	return balance, nil
+}
+
+// GetTokenBalance returns the balance for a specific fungible token
+func (c *Client) GetTokenBalance(ctx context.Context, address string, contractID string) (uint64, error) {
+	url := fmt.Sprintf("%s/extended/v1/address/%s/balances", c.baseURL, address)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch balance: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("API error: %s", string(body))
+	}
+
+	var balanceResp AccountBalanceResponse
+	if err := json.NewDecoder(resp.Body).Decode(&balanceResp); err != nil {
+		return 0, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	tokenBalance, exists := balanceResp.FungibleTokens[contractID]
+	if !exists {
+		return 0, nil // No balance for this token
+	}
+
+	balance, err := strconv.ParseUint(tokenBalance.Balance, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid balance: %w", err)
+	}
+
+	return balance, nil
+}

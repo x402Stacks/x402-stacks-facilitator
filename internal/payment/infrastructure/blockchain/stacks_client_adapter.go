@@ -87,3 +87,15 @@ func (a *StacksClientAdapter) getClientForNetwork(network valueobject.Network) *
 	}
 	return a.testnetClient
 }
+
+// GetSTXBalance returns the STX balance for an address on the specified network
+func (a *StacksClientAdapter) GetSTXBalance(ctx context.Context, address string, network valueobject.Network) (uint64, error) {
+	client := a.getClientForNetwork(network)
+	return client.GetSTXBalance(ctx, address)
+}
+
+// GetTokenBalance returns the token balance for an address on the specified network
+func (a *StacksClientAdapter) GetTokenBalance(ctx context.Context, address string, contractID string, network valueobject.Network) (uint64, error) {
+	client := a.getClientForNetwork(network)
+	return client.GetTokenBalance(ctx, address, contractID)
+}
