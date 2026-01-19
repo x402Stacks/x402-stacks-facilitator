@@ -209,6 +209,122 @@ curl -X POST http://localhost:8080/api/v1/settle \
 
 ---
 
+## Coinbase x402 Compatible API
+
+These endpoints provide drop-in compatibility with Coinbase x402 clients, using the same request/response format.
+
+### Supported Kinds
+
+Returns the payment kinds this facilitator supports.
+
+```
+GET /supported
+```
+
+**Response:**
+```json
+{
+  "kinds": [
+    {"x402Version": 1, "scheme": "exact", "network": "stacks-mainnet"},
+    {"x402Version": 1, "scheme": "exact", "network": "stacks-testnet"}
+  ],
+  "extensions": [],
+  "signers": {}
+}
+```
+
+---
+
+### Verify Payment (Coinbase Format)
+
+Validates a signed transaction WITHOUT broadcasting. Checks authorization fields, recipient, amount, and sender balance.
+
+```
+POST /verify
+```
+
+**Request Body:**
+
+```json
+{
+  "paymentPayload": {
+    "x402Version": 1,
+    "scheme": "exact",
+    "network": "stacks-testnet",
+    "payload": {
+      "signedTransaction": "0x00000001...",
+      "authorization": {
+        "from": "ST2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        "to": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+        "value": "1000000"
+      }
+    }
+  },
+  "paymentRequirements": {
+    "scheme": "exact",
+    "network": "stacks-testnet",
+    "maxAmountRequired": "1000000",
+    "payTo": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM"
+  }
+}
+```
+
+**Success Response (200 OK):**
+
+```json
+{
+  "isValid": true,
+  "payer": "ST2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+}
+```
+
+**Validation Failed Response (200 OK):**
+
+```json
+{
+  "isValid": false,
+  "payer": "ST2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+  "invalidReason": "insufficient balance: has 500000, needs 1000000"
+}
+```
+
+---
+
+### Settle Payment (Coinbase Format)
+
+Broadcasts a signed transaction and waits for confirmation.
+
+```
+POST /settle
+```
+
+**Request Body:** Same format as `/verify`
+
+**Success Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "payer": "ST2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+  "transaction": "0xabcdef1234567890...",
+  "network": "stacks-testnet"
+}
+```
+
+**Failed Response (400 Bad Request):**
+
+```json
+{
+  "success": false,
+  "payer": "ST2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+  "transaction": "0x...",
+  "network": "stacks-testnet",
+  "errorReason": "recipient mismatch"
+}
+```
+
+---
+
 ## Token Types
 
 | Token | Description | Transaction Type |
@@ -252,6 +368,7 @@ stacks-facilitator/
 │   │   └── infrastructure/            # External concerns
 │   │       ├── blockchain/            # Stacks client adapter
 │   │       └── http/                  # HTTP handlers
+│   │           └── coinbase/          # Coinbase x402 compatibility
 │   └── stacks/                        # Hiro API client
 ├── Dockerfile
 ├── docker-compose.yml
