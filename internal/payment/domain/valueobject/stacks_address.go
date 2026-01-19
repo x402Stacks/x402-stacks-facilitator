@@ -16,18 +16,21 @@ func NewStacksAddress(addr string) (StacksAddress, error) {
 		return StacksAddress{}, errors.New("address cannot be empty")
 	}
 
+	// Normalize to uppercase (Stacks addresses are canonically uppercase)
+	normalized := strings.ToUpper(addr)
+
 	// Validate prefix (ST for testnet, SP for mainnet, SM for mainnet multisig, SN for testnet multisig)
-	if !strings.HasPrefix(addr, "ST") && !strings.HasPrefix(addr, "SP") &&
-		!strings.HasPrefix(addr, "SM") && !strings.HasPrefix(addr, "SN") {
+	if !strings.HasPrefix(normalized, "ST") && !strings.HasPrefix(normalized, "SP") &&
+		!strings.HasPrefix(normalized, "SM") && !strings.HasPrefix(normalized, "SN") {
 		return StacksAddress{}, errors.New("invalid Stacks address prefix: must start with ST, SP, SM, or SN")
 	}
 
 	// Validate length (Stacks addresses are typically 41 characters)
-	if len(addr) < 30 || len(addr) > 50 {
+	if len(normalized) < 30 || len(normalized) > 50 {
 		return StacksAddress{}, errors.New("invalid Stacks address length")
 	}
 
-	return StacksAddress{value: addr}, nil
+	return StacksAddress{value: normalized}, nil
 }
 
 // String returns the address as a string
