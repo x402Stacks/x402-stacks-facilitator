@@ -14,7 +14,7 @@
 *.dll
 *.so
 *.dylib
-server
+/server
 
 # Test files
 *_test.go
