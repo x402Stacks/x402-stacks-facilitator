@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -39,15 +40,20 @@ func NewSettlePaymentHandlerV2(broadcaster TransactionBroadcaster, verificationS
 	return &SettlePaymentHandlerV2{
 		broadcaster:     broadcaster,
 		verificationSvc: verificationSvc,
-		maxRetries:      15,
-		retryDelay:      2 * time.Second,
+		maxRetries:      DefaultSettleMaxRetries,
+		retryDelay:      DefaultSettleRetryDelay,
 	}
 }
 
 // Handle processes the v2 settle payment command
 func (h *SettlePaymentHandlerV2) Handle(ctx context.Context, cmd SettlePaymentCommandV2) (SettlePaymentResultV2, error) {
+	log.Printf("[SettleV2] Processing settle command: version=%d scheme=%s network=%s asset=%s payTo=%s amount=%s",
+		cmd.X402Version, cmd.PaymentRequirements.Scheme, cmd.PaymentRequirements.Network,
+		cmd.PaymentRequirements.Asset, cmd.PaymentRequirements.PayTo, cmd.PaymentRequirements.Amount)
+
 	// Validate x402 version
 	if cmd.X402Version != 2 {
+		log.Printf("[SettleV2] Invalid x402 version: %d", cmd.X402Version)
 		return SettlePaymentResultV2{
 			Success:     false,
 			ErrorReason: valueobject.ErrInvalidX402Version,
@@ -57,6 +63,7 @@ func (h *SettlePaymentHandlerV2) Handle(ctx context.Context, cmd SettlePaymentCo
 
 	// Validate scheme
 	if cmd.PaymentRequirements.Scheme != "exact" {
+		log.Printf("[SettleV2] Unsupported scheme: %s", cmd.PaymentRequirements.Scheme)
 		return SettlePaymentResultV2{
 			Success:     false,
 			ErrorReason: valueobject.ErrUnsupportedScheme,
@@ -67,6 +74,7 @@ func (h *SettlePaymentHandlerV2) Handle(ctx context.Context, cmd SettlePaymentCo
 	// Parse network from CAIP-2 format
 	network, err := valueobject.NewNetworkFromCAIP2(cmd.PaymentRequirements.Network)
 	if err != nil {
+		log.Printf("[SettleV2] Invalid network %q: %v", cmd.PaymentRequirements.Network, err)
 		return SettlePaymentResultV2{
 			Success:     false,
 			ErrorReason: valueobject.ErrInvalidNetwork,
@@ -77,19 +85,23 @@ func (h *SettlePaymentHandlerV2) Handle(ctx context.Context, cmd SettlePaymentCo
 	// Extract transaction from payload
 	txHex, ok := cmd.PaymentPayload.Payload["transaction"].(string)
 	if !ok || txHex == "" {
+		log.Printf("[SettleV2] Missing or invalid transaction in payload")
 		return SettlePaymentResultV2{
 			Success:     false,
 			ErrorReason: valueobject.ErrInvalidPayload,
 			Network:     cmd.PaymentRequirements.Network,
 		}, nil
 	}
+	log.Printf("[SettleV2] Transaction hex length: %d", len(txHex))
 
 	// Determine token type from asset
 	tokenType := assetToTokenType(cmd.PaymentRequirements.Asset)
+	log.Printf("[SettleV2] Resolved token type: %s", tokenType)
 
 	// Parse amount
 	amount, err := strconv.ParseUint(cmd.PaymentRequirements.Amount, 10, 64)
 	if err != nil {
+		log.Printf("[SettleV2] Invalid amount %q: %v", cmd.PaymentRequirements.Amount, err)
 		return SettlePaymentResultV2{
 			Success:     false,
 			ErrorReason: valueobject.ErrInvalidPaymentRequirements,
@@ -100,6 +112,7 @@ func (h *SettlePaymentHandlerV2) Handle(ctx context.Context, cmd SettlePaymentCo
 	// Parse expected recipient
 	expectedRecipient, err := valueobject.NewStacksAddress(cmd.PaymentRequirements.PayTo)
 	if err != nil {
+		log.Printf("[SettleV2] Invalid recipient address %q: %v", cmd.PaymentRequirements.PayTo, err)
 		return SettlePaymentResultV2{
 			Success:     false,
 			ErrorReason: valueobject.ErrInvalidPaymentRequirements,
@@ -108,18 +121,23 @@ func (h *SettlePaymentHandlerV2) Handle(ctx context.Context, cmd SettlePaymentCo
 	}
 
 	// Broadcast the transaction
+	log.Printf("[SettleV2] Broadcasting transaction on %s", network)
 	txID, err := h.broadcaster.BroadcastTransaction(ctx, txHex, network)
 	if err != nil {
+		log.Printf("[SettleV2] Broadcast failed: %v", err)
 		return SettlePaymentResultV2{
 			Success:     false,
 			ErrorReason: valueobject.ErrBroadcastFailed,
 			Network:     cmd.PaymentRequirements.Network,
 		}, fmt.Errorf("failed to broadcast transaction: %w", err)
 	}
+	log.Printf("[SettleV2] Broadcast successful: tx=%s", txID.String())
 
 	// Wait for transaction to be confirmed
+	log.Printf("[SettleV2] Waiting for confirmation: tx=%s maxRetries=%d retryDelay=%s", txID.String(), h.maxRetries, h.retryDelay)
 	tx, err := h.broadcaster.WaitForConfirmation(ctx, txID, tokenType, network, h.maxRetries, h.retryDelay)
 	if err != nil {
+		log.Printf("[SettleV2] Confirmation failed: tx=%s error=%v", txID.String(), err)
 		return SettlePaymentResultV2{
 			Success:     false,
 			ErrorReason: valueobject.ErrInvalidTransactionState,
@@ -127,6 +145,7 @@ func (h *SettlePaymentHandlerV2) Handle(ctx context.Context, cmd SettlePaymentCo
 			Network:     cmd.PaymentRequirements.Network,
 		}, fmt.Errorf("failed to confirm transaction: %w", err)
 	}
+	log.Printf("[SettleV2] Transaction confirmed: tx=%s status=%s block=%d", tx.TxID.String(), tx.Status, tx.BlockHeight)
 
 	// Build verification criteria
 	criteria := service.VerificationCriteria{
@@ -136,6 +155,7 @@ func (h *SettlePaymentHandlerV2) Handle(ctx context.Context, cmd SettlePaymentCo
 	}
 
 	// Verify transaction
+	log.Printf("[SettleV2] Verifying transaction: recipient=%s minAmount=%d", expectedRecipient.String(), amount)
 	verificationResult := h.verificationSvc.Verify(tx, criteria)
 
 	if !verificationResult.Valid {
@@ -146,6 +166,7 @@ func (h *SettlePaymentHandlerV2) Handle(ctx context.Context, cmd SettlePaymentCo
 			errorReason = mapVerificationErrorToV2(verificationResult.Errors[0])
 		}
 
+		log.Printf("[SettleV2] Verification failed: tx=%s reason=%s errors=%v", tx.TxID.String(), errorReason, verificationResult.Errors)
 		return SettlePaymentResultV2{
 			Success:     false,
 			ErrorReason: errorReason,
@@ -157,6 +178,7 @@ func (h *SettlePaymentHandlerV2) Handle(ctx context.Context, cmd SettlePaymentCo
 
 	// Check transaction status
 	if tx.Status == "failed" || tx.Status == "abort_by_response" || tx.Status == "abort_by_post_condition" {
+		log.Printf("[SettleV2] Transaction failed on chain: tx=%s status=%s", tx.TxID.String(), tx.Status)
 		return SettlePaymentResultV2{
 			Success:     false,
 			ErrorReason: valueobject.ErrTransactionFailed,
@@ -166,6 +188,7 @@ func (h *SettlePaymentHandlerV2) Handle(ctx context.Context, cmd SettlePaymentCo
 		}, nil
 	}
 
+	log.Printf("[SettleV2] Settlement complete: tx=%s payer=%s amount=%d", tx.TxID.String(), tx.Sender.String(), tx.Amount.Value())
 	return SettlePaymentResultV2{
 		Success:     true,
 		Payer:       tx.Sender.String(),

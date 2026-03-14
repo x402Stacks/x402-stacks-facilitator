@@ -9,6 +9,13 @@ import (
 	"github.com/x402stacks/stacks-facilitator/internal/payment/domain/valueobject"
 )
 
+// Verify retry defaults: 10 retries × 2s = 20s window.
+// Verify only fetches an existing transaction, so a shorter window is acceptable.
+const (
+	DefaultVerifyMaxRetries = 10
+	DefaultVerifyRetryDelay = 2 * time.Second
+)
+
 // BlockchainClient interface for fetching transactions
 type BlockchainClient interface {
 	GetTransactionWithRetry(ctx context.Context, txID valueobject.TransactionID, tokenType valueobject.TokenType, network valueobject.Network, maxRetries int, retryDelay time.Duration) (service.BlockchainTransaction, error)
@@ -55,8 +62,8 @@ func NewVerifyPaymentHandler(client BlockchainClient, verificationSvc *service.V
 	return &VerifyPaymentHandler{
 		blockchainClient:  client,
 		verificationSvc:   verificationSvc,
-		maxRetries:        10,
-		retryDelay:        2 * time.Second,
+		maxRetries:        DefaultVerifyMaxRetries,
+		retryDelay:        DefaultVerifyRetryDelay,
 	}
 }
 

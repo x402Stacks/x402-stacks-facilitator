@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -52,6 +53,10 @@ type ContractFunctionArgRaw struct {
 	Name string `json:"name"`
 }
 
+// HTTPClientTimeout is the timeout for individual HTTP requests to the Hiro API.
+// Increased from 30s to 45s to handle Hiro API slowdowns without killing in-flight requests.
+const HTTPClientTimeout = 45 * time.Second
+
 // Client is a Stacks blockchain API client
 type Client struct {
 	baseURL    string
@@ -63,7 +68,7 @@ func NewClient(baseURL string) *Client {
 	return &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: HTTPClientTimeout,
 		},
 	}
 }
@@ -108,38 +113,46 @@ func (c *Client) GetTransaction(ctx context.Context, txID valueobject.Transactio
 // GetTransactionWithTokenType fetches a transaction and parses it for a specific token type
 func (c *Client) GetTransactionWithTokenType(ctx context.Context, txID valueobject.TransactionID, tokenType valueobject.TokenType, network valueobject.Network) (service.BlockchainTransaction, error) {
 	url := fmt.Sprintf("%s/extended/v1/tx/%s", c.baseURL, txID.String())
+	log.Printf("[StacksClient] Fetching transaction: tx=%s token=%s url=%s", txID.String(), tokenType, url)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
+		log.Printf("[StacksClient] Failed to create request: %v", err)
 		return service.BlockchainTransaction{}, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		log.Printf("[StacksClient] HTTP request failed: tx=%s error=%v", txID.String(), err)
 		return service.BlockchainTransaction{}, fmt.Errorf("failed to fetch transaction: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
+		log.Printf("[StacksClient] Transaction not found: tx=%s", txID.String())
 		return service.BlockchainTransaction{}, errors.New("transaction not found")
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[StacksClient] API error: tx=%s status=%d body=%s", txID.String(), resp.StatusCode, string(body))
 		return service.BlockchainTransaction{}, fmt.Errorf("API error: %s", string(body))
 	}
 
 	var txResp TransactionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&txResp); err != nil {
+		log.Printf("[StacksClient] Failed to decode response: tx=%s error=%v", txID.String(), err)
 		return service.BlockchainTransaction{}, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	log.Printf("[StacksClient] Transaction fetched: tx=%s status=%s type=%s block=%d", txResp.TxID, txResp.TxStatus, txResp.TxType, txResp.BlockHeight)
 	return c.parseTransactionResponse(txResp, tokenType)
 }
 
 // BroadcastTransaction broadcasts a signed transaction to the network
 func (c *Client) BroadcastTransaction(ctx context.Context, signedTx string) (valueobject.TransactionID, error) {
 	url := fmt.Sprintf("%s/v2/transactions", c.baseURL)
+	log.Printf("[StacksClient] Broadcasting transaction to %s", url)
 
 	// Remove 0x prefix if present
 	txHex := strings.TrimPrefix(signedTx, "0x")
@@ -147,27 +160,35 @@ func (c *Client) BroadcastTransaction(ctx context.Context, signedTx string) (val
 	// Decode hex to bytes
 	txBytes, err := hex.DecodeString(txHex)
 	if err != nil {
+		log.Printf("[StacksClient] Invalid transaction hex: %v", err)
 		return valueobject.TransactionID{}, fmt.Errorf("invalid transaction hex: %w", err)
 	}
+	log.Printf("[StacksClient] Decoded transaction: %d bytes", len(txBytes))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(txBytes))
 	if err != nil {
+		log.Printf("[StacksClient] Failed to create request: %v", err)
 		return valueobject.TransactionID{}, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		log.Printf("[StacksClient] HTTP request failed: %v", err)
 		return valueobject.TransactionID{}, fmt.Errorf("failed to broadcast transaction: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		log.Printf("[StacksClient] Failed to read response body: %v", err)
 		return valueobject.TransactionID{}, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	log.Printf("[StacksClient] Broadcast response: status=%d body=%s", resp.StatusCode, string(body))
+
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("[StacksClient] Broadcast rejected: status=%d body=%s", resp.StatusCode, string(body))
 		return valueobject.TransactionID{}, fmt.Errorf("broadcast failed: %s", string(body))
 	}
 
@@ -178,6 +199,7 @@ func (c *Client) BroadcastTransaction(ctx context.Context, signedTx string) (val
 		txIDStr = strings.Trim(string(body), "\"")
 	}
 
+	log.Printf("[StacksClient] Broadcast successful: txID=%s", txIDStr)
 	return valueobject.NewTransactionID(txIDStr)
 }
 

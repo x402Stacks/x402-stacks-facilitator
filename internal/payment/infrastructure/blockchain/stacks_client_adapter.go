@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/x402stacks/stacks-facilitator/internal/payment/domain/service"
@@ -56,28 +57,46 @@ func (a *StacksClientAdapter) WaitForConfirmation(ctx context.Context, txID valu
 	client := a.getClientForNetwork(network)
 
 	for i := 0; i < maxRetries; i++ {
+		log.Printf("[Adapter] Polling for confirmation: tx=%s attempt=%d/%d", txID.String(), i+1, maxRetries)
 		tx, err := client.GetTransactionWithTokenType(ctx, txID, tokenType, network)
 		if err == nil {
-			if tx.IsConfirmed || stacks.IsTransactionFailed(tx.Status) {
+			if tx.IsConfirmed {
+				log.Printf("[Adapter] Transaction confirmed: tx=%s status=%s block=%d", txID.String(), tx.Status, tx.BlockHeight)
 				return tx, nil
 			}
+			if stacks.IsTransactionFailed(tx.Status) {
+				log.Printf("[Adapter] Transaction failed on chain: tx=%s status=%s", txID.String(), tx.Status)
+				return tx, nil
+			}
+			log.Printf("[Adapter] Transaction not yet confirmed: tx=%s status=%s", txID.String(), tx.Status)
+		} else {
+			log.Printf("[Adapter] Error fetching transaction: tx=%s attempt=%d error=%v", txID.String(), i+1, err)
 		}
 
 		select {
 		case <-ctx.Done():
+			log.Printf("[Adapter] Context cancelled while waiting for confirmation: tx=%s", txID.String())
 			return service.BlockchainTransaction{}, ctx.Err()
 		case <-time.After(retryDelay):
 		}
 	}
 
+	log.Printf("[Adapter] Max retries reached, fetching final state: tx=%s", txID.String())
 	// Return last fetched transaction even if not confirmed
 	return client.GetTransactionWithTokenType(ctx, txID, tokenType, network)
 }
 
 // BroadcastTransaction broadcasts a signed transaction
 func (a *StacksClientAdapter) BroadcastTransaction(ctx context.Context, signedTx string, network valueobject.Network) (valueobject.TransactionID, error) {
+	log.Printf("[Adapter] Broadcasting transaction on %s (hex length=%d)", network, len(signedTx))
 	client := a.getClientForNetwork(network)
-	return client.BroadcastTransaction(ctx, signedTx)
+	txID, err := client.BroadcastTransaction(ctx, signedTx)
+	if err != nil {
+		log.Printf("[Adapter] Broadcast failed on %s: %v", network, err)
+		return txID, err
+	}
+	log.Printf("[Adapter] Broadcast successful: tx=%s network=%s", txID.String(), network)
+	return txID, nil
 }
 
 // getClientForNetwork returns the appropriate client for the network

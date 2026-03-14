@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -122,16 +123,22 @@ func (h *Handler) VerifyV1(c echo.Context) error {
 
 // SettleV1 handles POST /api/v1/settle (legacy v1 format)
 func (h *Handler) SettleV1(c echo.Context) error {
+	log.Printf("[SettleV1] Received settle request")
+
 	var req SettleRequest
 	if err := c.Bind(&req); err != nil {
+		log.Printf("[SettleV1] Failed to bind request: %v", err)
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "invalid_request",
 			Message: err.Error(),
 		})
 	}
 
+	log.Printf("[SettleV1] Request: network=%s recipient=%s token=%s amount=%d", req.Network, req.ExpectedRecipient, req.TokenType, req.MinAmount)
+
 	// Validate required fields
 	if req.SignedTransaction == "" || req.ExpectedRecipient == "" || req.Network == "" {
+		log.Printf("[SettleV1] Missing required fields")
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "missing_required_fields",
 			Message: "signed_transaction, expected_recipient, and network are required",
@@ -154,6 +161,7 @@ func (h *Handler) SettleV1(c echo.Context) error {
 
 	result, err := h.settleHandler.Handle(c.Request().Context(), cmd)
 	if err != nil {
+		log.Printf("[SettleV1] Settlement failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "settlement_failed",
 			Message: err.Error(),
@@ -175,9 +183,11 @@ func (h *Handler) SettleV1(c echo.Context) error {
 	}
 
 	if !result.Success {
+		log.Printf("[SettleV1] Settlement verification failed: tx=%s errors=%v", result.TxID, result.Errors)
 		return c.JSON(http.StatusBadRequest, response)
 	}
 
+	log.Printf("[SettleV1] Settlement successful: tx=%s block=%d amount=%d", result.TxID, result.BlockHeight, result.Amount)
 	return c.JSON(http.StatusOK, response)
 }
 
@@ -265,8 +275,11 @@ func (h *Handler) Verify(c echo.Context) error {
 
 // Settle handles POST /settle (x402 v2 Coinbase-compatible)
 func (h *Handler) Settle(c echo.Context) error {
+	log.Printf("[SettleV2] Received settle request")
+
 	var req SettleRequestV2
 	if err := c.Bind(&req); err != nil {
+		log.Printf("[SettleV2] Failed to bind request: %v", err)
 		return c.JSON(http.StatusBadRequest, SettleResponseV2{
 			Success:     false,
 			ErrorReason: "invalid_request: " + err.Error(),
@@ -275,8 +288,13 @@ func (h *Handler) Settle(c echo.Context) error {
 		})
 	}
 
+	log.Printf("[SettleV2] Request: version=%d scheme=%s network=%s asset=%s payTo=%s amount=%s",
+		req.X402Version, req.PaymentRequirements.Scheme, req.PaymentRequirements.Network,
+		req.PaymentRequirements.Asset, req.PaymentRequirements.PayTo, req.PaymentRequirements.Amount)
+
 	// Check if V2 handler is available
 	if h.settleHandlerV2 == nil {
+		log.Printf("[SettleV2] V2 handler not implemented")
 		return c.JSON(http.StatusNotImplemented, SettleResponseV2{
 			Success:     false,
 			ErrorReason: "v2_not_implemented",
@@ -287,6 +305,7 @@ func (h *Handler) Settle(c echo.Context) error {
 
 	// Validate required fields
 	if req.PaymentRequirements.PayTo == "" || req.PaymentRequirements.Network == "" {
+		log.Printf("[SettleV2] Missing required fields: payTo or network")
 		return c.JSON(http.StatusBadRequest, SettleResponseV2{
 			Success:     false,
 			ErrorReason: valueobject.ErrInvalidPaymentRequirements,
@@ -324,6 +343,7 @@ func (h *Handler) Settle(c echo.Context) error {
 
 	result, err := h.settleHandlerV2.Handle(c.Request().Context(), cmd)
 	if err != nil {
+		log.Printf("[SettleV2] Settlement error: %v", err)
 		return c.JSON(http.StatusInternalServerError, SettleResponseV2{
 			Success:     false,
 			ErrorReason: valueobject.ErrUnexpectedSettleError,
@@ -342,9 +362,11 @@ func (h *Handler) Settle(c echo.Context) error {
 	}
 
 	if !result.Success {
+		log.Printf("[SettleV2] Settlement failed: reason=%s payer=%s tx=%s", result.ErrorReason, result.Payer, result.Transaction)
 		return c.JSON(http.StatusBadRequest, response)
 	}
 
+	log.Printf("[SettleV2] Settlement successful: payer=%s tx=%s network=%s", result.Payer, result.Transaction, result.Network)
 	return c.JSON(http.StatusOK, response)
 }
 
