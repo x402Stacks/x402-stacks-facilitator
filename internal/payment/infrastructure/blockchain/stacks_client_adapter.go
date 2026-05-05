@@ -18,9 +18,14 @@ type StacksClientAdapter struct {
 
 // NewStacksClientAdapter creates a new StacksClientAdapter
 func NewStacksClientAdapter() *StacksClientAdapter {
+	return NewStacksClientAdapterWithAPIKey("")
+}
+
+// NewStacksClientAdapterWithAPIKey creates a new StacksClientAdapter with an optional Hiro API key.
+func NewStacksClientAdapterWithAPIKey(apiKey string) *StacksClientAdapter {
 	return &StacksClientAdapter{
-		mainnetClient: stacks.NewClientForNetwork(valueobject.NetworkMainnet),
-		testnetClient: stacks.NewClientForNetwork(valueobject.NetworkTestnet),
+		mainnetClient: stacks.NewClientForNetworkWithAPIKey(valueobject.NetworkMainnet, apiKey),
+		testnetClient: stacks.NewClientForNetworkWithAPIKey(valueobject.NetworkTestnet, apiKey),
 	}
 }
 

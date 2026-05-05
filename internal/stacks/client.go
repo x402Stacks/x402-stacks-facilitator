@@ -61,12 +61,19 @@ const HTTPClientTimeout = 45 * time.Second
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+	apiKey     string
 }
 
 // NewClient creates a new Stacks client
 func NewClient(baseURL string) *Client {
+	return NewClientWithAPIKey(baseURL, "")
+}
+
+// NewClientWithAPIKey creates a new Stacks client with an optional Hiro API key.
+func NewClientWithAPIKey(baseURL string, apiKey string) *Client {
 	return &Client{
 		baseURL: baseURL,
+		apiKey:  apiKey,
 		httpClient: &http.Client{
 			Timeout: HTTPClientTimeout,
 		},
@@ -78,6 +85,11 @@ func NewClientForNetwork(network valueobject.Network) *Client {
 	return NewClient(network.APIBaseURL())
 }
 
+// NewClientForNetworkWithAPIKey creates a network client with an optional Hiro API key.
+func NewClientForNetworkWithAPIKey(network valueobject.Network, apiKey string) *Client {
+	return NewClientWithAPIKey(network.APIBaseURL(), apiKey)
+}
+
 // GetTransaction fetches a transaction by ID
 func (c *Client) GetTransaction(ctx context.Context, txID valueobject.TransactionID) (service.BlockchainTransaction, error) {
 	url := fmt.Sprintf("%s/extended/v1/tx/%s", c.baseURL, txID.String())
@@ -86,6 +98,7 @@ func (c *Client) GetTransaction(ctx context.Context, txID valueobject.Transactio
 	if err != nil {
 		return service.BlockchainTransaction{}, fmt.Errorf("failed to create request: %w", err)
 	}
+	c.addAPIKeyHeader(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -120,6 +133,7 @@ func (c *Client) GetTransactionWithTokenType(ctx context.Context, txID valueobje
 		log.Printf("[StacksClient] Failed to create request: %v", err)
 		return service.BlockchainTransaction{}, fmt.Errorf("failed to create request: %w", err)
 	}
+	c.addAPIKeyHeader(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -171,6 +185,7 @@ func (c *Client) BroadcastTransaction(ctx context.Context, signedTx string) (val
 		return valueobject.TransactionID{}, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
+	c.addAPIKeyHeader(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -201,6 +216,13 @@ func (c *Client) BroadcastTransaction(ctx context.Context, signedTx string) (val
 
 	log.Printf("[StacksClient] Broadcast successful: txID=%s", txIDStr)
 	return valueobject.NewTransactionID(txIDStr)
+}
+
+func (c *Client) addAPIKeyHeader(req *http.Request) {
+	if c.apiKey == "" {
+		return
+	}
+	req.Header.Set("x-api-key", c.apiKey)
 }
 
 // parseTransactionResponse converts API response to domain model

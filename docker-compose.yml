@@ -9,6 +9,7 @@ services:
       - "8089:8089"
     environment:
       - PORT=8089
+      - HIRO_API_KEY=${HIRO_API_KEY:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8089/health"]

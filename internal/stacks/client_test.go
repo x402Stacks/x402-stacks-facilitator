@@ -18,12 +18,12 @@ func TestClient_GetTransaction_STXTransfer(t *testing.T) {
 		assert.Equal(t, "/extended/v1/tx/0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", r.URL.Path)
 
 		response := TransactionResponse{
-			TxID:        "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-			TxStatus:    "success",
-			TxType:      "token_transfer",
-			BlockHeight: 12345,
-			Fee:         "180",
-			Nonce:       5,
+			TxID:          "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			TxStatus:      "success",
+			TxType:        "token_transfer",
+			BlockHeight:   12345,
+			Fee:           "180",
+			Nonce:         5,
 			SenderAddress: "ST2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
 			TokenTransfer: &TokenTransferData{
 				RecipientAddress: "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
@@ -53,15 +53,46 @@ func TestClient_GetTransaction_STXTransfer(t *testing.T) {
 	assert.Equal(t, valueobject.TokenSTX, tx.TokenType)
 }
 
+func TestClient_GetTransaction_SendsAPIKeyWhenConfigured(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "test-hiro-key", r.Header.Get("x-api-key"))
+
+		response := TransactionResponse{
+			TxID:          "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			TxStatus:      "success",
+			TxType:        "token_transfer",
+			BlockHeight:   12345,
+			Fee:           "180",
+			Nonce:         5,
+			SenderAddress: "ST2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+			TokenTransfer: &TokenTransferData{
+				RecipientAddress: "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+				Amount:           "1000000",
+				Memo:             "test payment",
+			},
+		}
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := NewClientWithAPIKey(server.URL, "test-hiro-key")
+	ctx := context.Background()
+	txID, _ := valueobject.NewTransactionID("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+	_, err := client.GetTransaction(ctx, txID)
+
+	require.NoError(t, err)
+}
+
 func TestClient_GetTransaction_PendingTransaction(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := TransactionResponse{
-			TxID:        "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-			TxStatus:    "pending",
-			TxType:      "token_transfer",
-			BlockHeight: 0,
-			Fee:         "180",
-			Nonce:       5,
+			TxID:          "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			TxStatus:      "pending",
+			TxType:        "token_transfer",
+			BlockHeight:   0,
+			Fee:           "180",
+			Nonce:         5,
 			SenderAddress: "ST2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
 			TokenTransfer: &TokenTransferData{
 				RecipientAddress: "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
@@ -87,12 +118,12 @@ func TestClient_GetTransaction_PendingTransaction(t *testing.T) {
 func TestClient_GetTransaction_FailedTransaction(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := TransactionResponse{
-			TxID:        "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-			TxStatus:    "abort_by_response",
-			TxType:      "token_transfer",
-			BlockHeight: 12345,
-			Fee:         "180",
-			Nonce:       5,
+			TxID:          "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			TxStatus:      "abort_by_response",
+			TxType:        "token_transfer",
+			BlockHeight:   12345,
+			Fee:           "180",
+			Nonce:         5,
 			SenderAddress: "ST2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
 			TokenTransfer: &TokenTransferData{
 				RecipientAddress: "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
@@ -150,6 +181,23 @@ func TestClient_BroadcastTransaction(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890", txID.String())
+}
+
+func TestClient_BroadcastTransaction_SendsAPIKeyWhenConfigured(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "test-hiro-key", r.Header.Get("x-api-key"))
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`"0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"`))
+	}))
+	defer server.Close()
+
+	client := NewClientWithAPIKey(server.URL, "test-hiro-key")
+	ctx := context.Background()
+
+	_, err := client.BroadcastTransaction(ctx, "0x00000001deadbeef")
+
+	require.NoError(t, err)
 }
 
 func TestClient_BroadcastTransaction_Error(t *testing.T) {

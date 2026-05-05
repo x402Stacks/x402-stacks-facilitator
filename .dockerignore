@@ -8,6 +8,10 @@
 *.swp
 *.swo
 
+# Environment
+.env
+.env.local
+
 # Build artifacts
 *.exe
 *.exe~

@@ -64,7 +64,7 @@ func TestHandler_Verify_Success(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	err := handler.Verify(c)
+	err := handler.VerifyV1(c)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
@@ -86,7 +86,7 @@ func TestHandler_Verify_InvalidRequest(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	err := handler.Verify(c)
+	err := handler.VerifyV1(c)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
@@ -102,7 +102,7 @@ func TestHandler_Verify_MissingRequiredFields(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	err := handler.Verify(c)
+	err := handler.VerifyV1(c)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
@@ -140,7 +140,7 @@ func TestHandler_Settle_Success(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	err := handler.Settle(c)
+	err := handler.SettleV1(c)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
@@ -162,7 +162,7 @@ func TestHandler_Settle_InvalidRequest(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	err := handler.Settle(c)
+	err := handler.SettleV1(c)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
@@ -178,7 +178,7 @@ func TestHandler_Settle_MissingRequiredFields(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	err := handler.Settle(c)
+	err := handler.SettleV1(c)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)

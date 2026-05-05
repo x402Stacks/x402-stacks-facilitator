@@ -47,6 +47,7 @@ go build -o server ./cmd/server
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8080` | Server port |
+| `HIRO_API_KEY` | unset | Optional Hiro API key sent as `x-api-key` on Hiro API requests |
 
 ## API Reference
 

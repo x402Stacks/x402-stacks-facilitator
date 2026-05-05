@@ -18,9 +18,10 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+	hiroAPIKey := os.Getenv("HIRO_API_KEY")
 
 	// Initialize infrastructure
-	stacksAdapter := blockchain.NewStacksClientAdapter()
+	stacksAdapter := blockchain.NewStacksClientAdapterWithAPIKey(hiroAPIKey)
 
 	// Initialize domain services
 	verificationService := service.NewVerificationService()
